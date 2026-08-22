@@ -10,7 +10,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnableParallel
 
-from config import llm_dengan_fallback
+from config import HEMAT, llm_dengan_fallback
 
 
 def build(lapor=None):
@@ -43,6 +43,20 @@ def jalankan(topik: str):
     chain, bersusun, paralel = build(lapor=catatan.append)
     for c in catatan:
         yield "step", c
+
+    if HEMAT:
+        # Mode hemat: 1 request saja. Konsep chain tetap terlihat
+        # (prompt | llm | parser) tanpa menghabiskan kuota harian.
+        yield "step", "Chain dasar: `prompt | llm | parser` (mode hemat, 1 request)"
+        for chunk in chain.stream({"topik": topik}):
+            yield "token", chunk
+        yield "step", "Mode hemat aktif"
+        yield "token", (
+            "Demo chain bersusun dan paralel dilewati untuk menghemat kuota.\n"
+            "Set `HEMAT=0` di `.env` untuk melihat ketiganya (butuh 5 request)."
+        )
+        yield "done", ""
+        return
 
     yield "step", "1/3 Chain dasar"
     for chunk in chain.stream({"topik": topik}):

@@ -147,9 +147,15 @@ summary{cursor:pointer;font-weight:600;font-size:16px}
 
 <script>
 const FW = [
-  {id:"langchain", nama:"LangChain", sub:"Chain linear: prompt | llm | parser. Deterministik, mudah didebug."},
-  {id:"langgraph", nama:"LangGraph", sub:"Graph berstate dengan loop revisi sampai skor >= 8 atau 3 putaran."},
-  {id:"crewai",    nama:"CrewAI",    sub:"Tim 3 agent: Peneliti, Penulis, Editor. Konteks diestafetkan."},
+  {id:"langchain", nama:"LangChain",
+   sub:"Chain linear: prompt | llm | parser. Deterministik, mudah didebug.",
+   hemat:"Chain linear: prompt | llm | parser. Mode hemat: 1 request."},
+  {id:"langgraph", nama:"LangGraph",
+   sub:"Graph berstate dengan loop revisi sampai skor >= 8 atau 3 putaran.",
+   hemat:"Graph berstate + loop revisi. Mode hemat: 1 putaran, 2 request."},
+  {id:"crewai", nama:"CrewAI",
+   sub:"Tim 3 agent: Peneliti, Penulis, Editor. Konteks diestafetkan.",
+   hemat:"Tim agent dengan konteks estafet. Mode hemat: 2 agent, 2 request."},
 ];
 
 const grid = document.getElementById("grid");
@@ -157,7 +163,7 @@ grid.innerHTML = FW.map(f => `
   <section class="card" data-fw="${f.id}">
     <header>
       <h2><span class="dot"></span>${f.nama}</h2>
-      <div class="sub">${f.sub}</div>
+      <div class="sub" id="sub-${f.id}">${f.sub}</div>
       <button class="run" data-id="${f.id}">Jalankan</button>
     </header>
     <div class="out" id="out-${f.id}"></div>
@@ -169,44 +175,46 @@ const md  = s => esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`([^`]+)`
 const aktif = {};
 
 function jalankan(id){
-  const out = document.getElementById("out-"+id);
-  const btn = document.querySelector(`.run[data-id="${id}"]`);
-  if (aktif[id]) return;
-  aktif[id] = true;
-  out.innerHTML = "";
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spin"></span> Berjalan...';
+  return new Promise(resolve => {
+    const out = document.getElementById("out-"+id);
+    const btn = document.querySelector(`.run[data-id="${id}"]`);
+    if (aktif[id]) return resolve();
+    aktif[id] = true;
+    out.innerHTML = "";
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span> Berjalan...';
 
-  const topik = encodeURIComponent(document.getElementById("topik").value || "AI Agent");
-  const es = new EventSource(`/api/run?framework=${id}&topik=${topik}`);
-  let buf = null;
+    const topik = encodeURIComponent(document.getElementById("topik").value || "AI Agent");
+    const es = new EventSource(`/api/run?framework=${id}&topik=${topik}`);
+    let buf = null;
 
-  const selesai = () => {
-    es.close(); aktif[id] = false;
-    btn.disabled = false; btn.textContent = "Jalankan Ulang";
-    cekSemua();
-  };
+    const selesai = () => {
+      es.close(); aktif[id] = false;
+      btn.disabled = false; btn.textContent = "Jalankan Ulang";
+      cekSemua(); resolve();
+    };
 
-  es.onmessage = e => {
-    const m = JSON.parse(e.data);
-    if (m.type === "step"){
-      const d = document.createElement("div");
-      d.className = "step"; d.innerHTML = md(m.data);
-      out.appendChild(d); buf = null;
-    } else if (m.type === "token"){
-      if (!buf){ buf = document.createElement("div"); out.appendChild(buf); buf.dataset.raw=""; }
-      buf.dataset.raw += m.data;
-      buf.innerHTML = md(buf.dataset.raw);
-    } else if (m.type === "error"){
-      const d = document.createElement("div");
-      d.className = "err"; d.textContent = m.data;
-      out.appendChild(d);
-    } else if (m.type === "end" || m.type === "done"){
-      if (m.type === "end") selesai();
-    }
-    out.scrollTop = out.scrollHeight;
-  };
-  es.onerror = selesai;
+    es.onmessage = e => {
+      const m = JSON.parse(e.data);
+      if (m.type === "step"){
+        const d = document.createElement("div");
+        d.className = "step"; d.innerHTML = md(m.data);
+        out.appendChild(d); buf = null;
+      } else if (m.type === "token"){
+        if (!buf){ buf = document.createElement("div"); out.appendChild(buf); buf.dataset.raw=""; }
+        buf.dataset.raw += m.data;
+        buf.innerHTML = md(buf.dataset.raw);
+      } else if (m.type === "error"){
+        const d = document.createElement("div");
+        d.className = "err"; d.textContent = m.data;
+        out.appendChild(d);
+      } else if (m.type === "end"){
+        selesai();
+      }
+      out.scrollTop = out.scrollHeight;
+    };
+    es.onerror = selesai;
+  });
 }
 
 function cekSemua(){
@@ -218,8 +226,10 @@ grid.addEventListener("click", e => {
   if (b) jalankan(b.dataset.id);
 });
 
-document.getElementById("runAll").onclick = () => {
-  FW.forEach(f => jalankan(f.id));
+document.getElementById("runAll").onclick = async () => {
+  // Berurutan, bukan paralel: menghindari rate limit per menit
+  // dan supaya perpindahan model lebih mudah diikuti.
+  for (const f of FW) { await jalankan(f.id); }
   cekSemua();
 };
 
@@ -230,7 +240,15 @@ fetch("/api/status").then(r=>r.json()).then(s=>{
   const el = document.getElementById("status");
   const p = [];
   p.push(`<span class="pill ${s.api_key_ok?'ok':'bad'}">API key ${s.api_key_ok?'terpasang':'BELUM diisi (.env)'}</span>`);
-  p.push(`<span class="pill">model: ${s.model}</span>`);
+  const aktif = s.model_aktif || s.model;
+  p.push(`<span class="pill">model: ${aktif}${aktif!==s.model?` (ganti dari ${s.model})`:""}</span>`);
+  if (s.hemat) FW.forEach(f => {
+    const el = document.getElementById("sub-"+f.id);
+    if (el && f.hemat) el.textContent = f.hemat;
+  });
+  if (s.hemat) p.push(`<span class="pill ok" title="Panggilan LLM dipangkas agar kuota harian awet. Set HEMAT=0 di .env untuk demo penuh.">mode hemat</span>`);
+  if (s.sisa_model != null)
+    p.push(`<span class="pill ${s.sisa_model>1?'':'bad'}" title="${(s.habis||[]).join(', ')||'belum ada yang habis'}">kuota: ${s.sisa_model}/${s.total_model} model tersisa hari ini</span>`);
   for (const [k,v] of Object.entries(s.frameworks))
     p.push(`<span class="pill ${v?'ok':'bad'}">${k} ${v?'siap':'belum terinstall'}</span>`);
   el.innerHTML = p.join("");

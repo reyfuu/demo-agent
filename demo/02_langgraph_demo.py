@@ -15,10 +15,11 @@ from typing import Annotated, TypedDict
 from langgraph.graph import END, START, StateGraph
 from langgraph.checkpoint.memory import MemorySaver
 
-from config import llm_dengan_fallback, teks
+from config import HEMAT, llm_dengan_fallback, teks
 
 BATAS_SKOR = 8
-BATAS_PUTARAN = 3
+# Mode hemat: cukup 1 putaran (2 request). Penuh: sampai 3 putaran (6 request).
+BATAS_PUTARAN = 1 if HEMAT else 3
 
 
 class State(TypedDict):

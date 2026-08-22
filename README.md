@@ -125,7 +125,24 @@ langsung geser ke model cadangan berikutnya dan menampilkan catatan
 seperti *"Kuota gemini-3.7-flash habis, otomatis memakai gemini-3.6-flash"*.
 
 Urutan cadangan diatur di `demo/config.py` pada variabel `CADANGAN`.
-Kalau semua kuota habis, tunggu reset harian atau pakai API key lain.
+Ada 8 model dalam rantai, jadi total jatah harian sekitar 160 request.
+
+### Tips menghemat kuota
+
+1. **Biarkan `HEMAT=1`** (default). Sekali "Jalankan Semua" hanya memakai
+   sekitar 5 request, bukan 20. Set `HEMAT=0` hanya kalau ingin demo penuh.
+2. **Klik per framework**, jangan "Jalankan Semua", kalau cuma ingin
+   melihat satu konsep.
+3. **Pakai `04_simulasi_offline.py`** untuk memahami perbedaan arsitektur.
+   Nol request, nol biaya.
+4. **Model `-lite` lebih longgar** limitnya. Set `GEMINI_MODEL=gemini-3.1-flash-lite`
+   di `.env` kalau hanya ingin mencoba-coba.
+5. **Buat project Google Cloud baru** untuk API key kedua. Kuota dihitung
+   per project, bukan per akun.
+6. **Kuota reset setiap hari** waktu Pasifik (sekitar 14:00-15:00 WIB).
+
+Aplikasi mencatat model yang habis di `.kuota_habis.json` dan otomatis
+melompatinya sampai reset harian berikutnya.
 
 **Model tidak ditemukan / 404**
 Google kadang memensiunkan model lama. Ganti `GEMINI_MODEL` di `.env`.

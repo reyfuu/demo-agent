@@ -8,13 +8,17 @@ Tim 3 agent berperan, proses sequential, konteks diestafetkan.
 
 from crewai import Agent, Crew, Process, Task
 
-from config import crewai_llm, llm_dengan_fallback
+from config import HEMAT, MODEL, crewai_llm, model_tersedia
 
 
 def build(topik: str, lapor=None):
-    # pilih model yang kuotanya masih ada, lalu pakai untuk CrewAI
-    _, model = llm_dengan_fallback(lapor=lapor)
+    # CrewAI tidak punya with_fallbacks, jadi pilih model dari catatan kuota
+    model = model_tersedia()
+    if lapor and model != MODEL:
+        lapor(f"Kuota `{MODEL}` habis hari ini, memakai `{model}`.")
     llm = crewai_llm(model=model)
+    # Mode hemat: 1 iterasi per agent supaya tiap agent = 1 request LLM.
+    iterasi = 1 if HEMAT else 3
 
     peneliti = Agent(
         role="Peneliti Teknologi",
@@ -23,7 +27,7 @@ def build(topik: str, lapor=None):
         llm=llm,
         verbose=True,
         allow_delegation=False,
-        max_iter=3,
+        max_iter=iterasi,
     )
     penulis = Agent(
         role="Penulis Konten",
@@ -32,7 +36,7 @@ def build(topik: str, lapor=None):
         llm=llm,
         verbose=True,
         allow_delegation=False,
-        max_iter=3,
+        max_iter=iterasi,
     )
     editor = Agent(
         role="Editor",
@@ -41,7 +45,7 @@ def build(topik: str, lapor=None):
         llm=llm,
         verbose=True,
         allow_delegation=False,
-        max_iter=3,
+        max_iter=iterasi,
     )
 
     t1 = Task(
@@ -62,6 +66,17 @@ def build(topik: str, lapor=None):
         context=[t2],
     )
 
+    if HEMAT:
+        # Hemat kuota: cukup 2 agent (Peneliti -> Penulis).
+        # Konsep estafet konteks antar agent tetap terlihat.
+        crew = Crew(
+            agents=[peneliti, penulis],
+            tasks=[t1, t2],
+            process=Process.sequential,
+            verbose=True,
+        )
+        return crew, [t1, t2]
+
     crew = Crew(
         agents=[peneliti, penulis, editor],
         tasks=[t1, t2, t3],
@@ -79,7 +94,9 @@ def jalankan(topik: str):
         yield "step", c
     nama = ["Peneliti mengumpulkan fakta", "Penulis menyusun artikel", "Editor memoles"]
 
-    yield "step", "Crew dimulai (3 agent, proses sequential)"
+    n = len(tasks)
+    hemat = " (mode hemat)" if HEMAT else ""
+    yield "step", f"Crew dimulai ({n} agent, proses sequential){hemat}"
     hasil = crew.kickoff()
 
     for label, t in zip(nama, tasks):

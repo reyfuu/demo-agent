@@ -46,9 +46,14 @@ def index():
 
 @app.get("/api/status")
 def status():
+    habis = config._habis_hari_ini()
     hasil = {
         "model": config.MODEL,
-        "cadangan": [m for m in config.rantai_model() if m != config.MODEL][:3],
+        "model_aktif": config.model_tersedia(),
+        "hemat": config.HEMAT,
+        "habis": sorted(habis),
+        "sisa_model": len([m for m in config.rantai_model() if m not in habis]),
+        "total_model": len(config.rantai_model()),
         "api_key_ok": False,
         "frameworks": {},
     }
@@ -131,6 +136,12 @@ async def run(framework: str, topik: str = "AI Agent untuk UMKM di Indonesia"):
                 q.put(("error", str(e)))
             except Exception as e:
                 traceback.print_exc()
+                if config._kuota_habis(e):
+                    # catat model yang habis (nama diambil dari pesan Google)
+                    # supaya run berikutnya langsung memakai cadangan
+                    config._tandai_habis(
+                        config.model_dari_error(e) or config.model_tersedia()
+                    )
                 q.put(("error", _pesan_ramah(e)))
             finally:
                 q.put((None, None))
