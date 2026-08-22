@@ -65,6 +65,8 @@ python3.11 -m venv .venv
 | `demo/02_langgraph_demo.py` | Graph berstate + loop revisi + checkpoint memory |
 | `demo/03_crewai_demo.py` | Crew 3 agent: Peneliti, Penulis, Editor |
 | `demo/04_simulasi_offline.py` | Jalan **tanpa API key**, memperlihatkan beda arsitektur |
+| `demo/05_lihat_riwayat.py` | Lihat riwayat run dari terminal |
+| `demo/riwayat.py` | Penyimpanan riwayat (JSON Lines) |
 | `demo/app.py` | Backend FastAPI, streaming SSE |
 | `demo/static/index.html` | UI web tiga panel |
 | `demo/PERBANDINGAN.md` | Analisis perbandingan lengkap |
@@ -77,6 +79,23 @@ Jalankan satuan lewat CLI:
 .venv/bin/python demo/02_langgraph_demo.py
 .venv/bin/python demo/03_crewai_demo.py
 ```
+
+## Riwayat run
+
+Setiap run otomatis tersimpan, jadi hasilnya bisa dibaca ulang
+**tanpa memakai kuota lagi**. Panel "Riwayat run" ada di bawah kartu:
+klik satu baris untuk melihat keluaran penuhnya.
+
+Dari terminal:
+
+```bash
+.venv/bin/python demo/05_lihat_riwayat.py             # 20 run terakhir
+.venv/bin/python demo/05_lihat_riwayat.py langgraph   # filter framework
+.venv/bin/python demo/05_lihat_riwayat.py --id a1b2c3 # satu run penuh
+```
+
+Data ada di `riwayat.jsonl` (200 run terakhir, tidak ikut ke git).
+Endpoint: `GET /api/riwayat`, `GET /api/riwayat/{id}`, `DELETE /api/riwayat`.
 
 ---
 

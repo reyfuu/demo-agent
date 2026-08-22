@@ -14,15 +14,17 @@ import queue
 import re
 import sys
 import threading
+import time
 import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 import config
+import riwayat
 
 HERE = Path(__file__).resolve().parent
 
@@ -124,6 +126,8 @@ async def run(framework: str, topik: str = "AI Agent untuk UMKM di Indonesia"):
 
     async def gen():
         q: queue.Queue = queue.Queue()
+        rekaman: list[dict] = []  # untuk disimpan ke riwayat
+        mulai = time.time()
 
         def worker():
             try:
@@ -153,14 +157,55 @@ async def run(framework: str, topik: str = "AI Agent untuk UMKM di Indonesia"):
             tipe, teks = await loop.run_in_executor(None, q.get)
             if tipe is None:
                 break
+            if tipe in ("step", "token", "error"):
+                rekaman.append({"type": tipe, "data": teks})
             yield _sse(tipe, teks)
-        yield _sse("end", "")
+
+        # simpan ke riwayat supaya bisa dilihat lagi tanpa memakai kuota
+        entri = None
+        try:
+            entri = riwayat.simpan(
+                framework=framework,
+                topik=topik,
+                model=config.model_tersedia(),
+                hemat=config.HEMAT,
+                peristiwa=rekaman,
+                status="gagal"
+                if any(p["type"] == "error" for p in rekaman)
+                else "selesai",
+                detik=time.time() - mulai,
+            )
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()  # riwayat gagal tidak boleh merusak demo
+
+        yield _sse("end", {"run_id": entri["id"]} if entri else "")
 
     return StreamingResponse(
         gen(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.get("/api/riwayat")
+def api_riwayat(limit: int = 50, framework: str | None = None):
+    return {
+        "item": riwayat.daftar(limit=limit, framework=framework),
+        "statistik": riwayat.statistik(),
+    }
+
+
+@app.get("/api/riwayat/{run_id}")
+def api_riwayat_detail(run_id: str):
+    e = riwayat.ambil(run_id)
+    if not e:
+        return JSONResponse({"error": "run tidak ditemukan"}, status_code=404)
+    return e
+
+
+@app.delete("/api/riwayat")
+def api_riwayat_hapus():
+    return {"dihapus": riwayat.hapus_semua()}
 
 
 if __name__ == "__main__":

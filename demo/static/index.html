@@ -102,6 +102,53 @@ tbody tr:nth-child(even){background:#ffffff05}
 details{margin-top:28px;background:var(--panel);border:1px solid var(--line);
   border-radius:16px;padding:16px 18px}
 summary{cursor:pointer;font-weight:600;font-size:16px}
+
+/* ---- riwayat ---- */
+.hist-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0 10px}
+.hist-bar select,.hist-bar button{
+  background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+  padding:7px 12px;border-radius:8px;font:inherit;font-size:13px;cursor:pointer}
+.hist-bar .stat{color:var(--dim);font-size:13px;margin-left:auto}
+.hist-bar button.danger:hover{border-color:#6b2020;color:#f87171}
+
+.hist{display:flex;flex-direction:column;gap:8px;max-height:420px;overflow-y:auto}
+.hist:empty::after{content:"Belum ada riwayat. Jalankan salah satu demo dulu.";
+  color:#5b6478;font-style:italic;font-size:13.5px}
+.runitem{
+  display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;
+  background:var(--panel2);border:1px solid var(--line);border-left-width:3px;
+  border-radius:10px;padding:10px 13px;cursor:pointer;transition:.12s}
+.runitem:hover{background:#232b3c;transform:translateX(2px)}
+.runitem[data-fw=langchain]{border-left-color:var(--lc)}
+.runitem[data-fw=langgraph]{border-left-color:var(--lg)}
+.runitem[data-fw=crewai]{border-left-color:var(--cw)}
+.runitem .fw{font-weight:600;font-size:13px;min-width:82px}
+.runitem .mid{min-width:0}
+.runitem .topik{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.runitem .cuplik{font-size:11.5px;color:var(--dim);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.runitem .meta{font-size:11px;color:var(--dim);text-align:right;white-space:nowrap}
+.runitem .gagal{color:#f87171}
+
+dialog{
+  background:var(--panel);color:var(--txt);border:1px solid var(--line);
+  border-radius:16px;padding:0;max-width:820px;width:92vw;max-height:86vh;
+  margin:auto}   /* margin:auto = benar-benar di tengah layar */
+dialog::backdrop{background:#000a;backdrop-filter:blur(2px)}
+dialog header{display:flex;align-items:center;gap:10px;padding:14px 18px;
+  border-bottom:1px solid var(--line)}
+dialog header h3{font-size:15px;flex:1}
+dialog header button{background:transparent;border:1px solid var(--line);
+  color:var(--dim);border-radius:8px;padding:5px 11px;cursor:pointer;font:inherit}
+dialog .isi{padding:14px 18px;overflow-y:auto;max-height:66vh;
+  font-size:13.5px;white-space:pre-wrap}
+dialog .isi .step{
+  margin:14px 0 8px;font:600 12px/1.4 ui-monospace,monospace;color:#93a4c0;
+  background:var(--panel2);border-left:3px solid #3b4356;padding:6px 10px;
+  border-radius:0 6px 6px 0;white-space:normal}
+dialog .isi .step:first-child{margin-top:0}
+dialog .isi .err{color:#f87171;background:#2a1212;padding:10px;
+  border-radius:8px;font-size:12.5px;white-space:pre-wrap}
 </style>
 </head>
 <body>
@@ -121,6 +168,22 @@ summary{cursor:pointer;font-weight:600;font-size:16px}
 </div>
 
 <div class="grid" id="grid"></div>
+
+<details open id="boxRiwayat">
+  <summary>Riwayat run</summary>
+  <div class="hist-bar">
+    <select id="filterFw">
+      <option value="">semua framework</option>
+      <option value="langchain">LangChain</option>
+      <option value="langgraph">LangGraph</option>
+      <option value="crewai">CrewAI</option>
+    </select>
+    <button id="muatRiwayat">Muat ulang</button>
+    <button id="hapusRiwayat" class="danger">Hapus semua</button>
+    <span class="stat" id="statRiwayat"></span>
+  </div>
+  <div class="hist" id="riwayat"></div>
+</details>
 
 <details open>
   <summary>Tabel perbandingan</summary>
@@ -144,6 +207,14 @@ summary{cursor:pointer;font-weight:600;font-size:16px}
 </details>
 
 </div>
+
+<dialog id="dlg">
+  <header>
+    <h3 id="dlgJudul"></h3>
+    <button id="dlgTutup">Tutup</button>
+  </header>
+  <div class="isi" id="dlgIsi"></div>
+</dialog>
 
 <script>
 const FW = [
@@ -169,7 +240,7 @@ grid.innerHTML = FW.map(f => `
     <div class="out" id="out-${f.id}"></div>
   </section>`).join("");
 
-const esc = s => s.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const esc = s => String(s ?? "").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
 const md  = s => esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`([^`]+)`/g,"<code>$1</code>");
 
 const aktif = {};
@@ -191,7 +262,9 @@ function jalankan(id){
     const selesai = () => {
       es.close(); aktif[id] = false;
       btn.disabled = false; btn.textContent = "Jalankan Ulang";
-      cekSemua(); resolve();
+      cekSemua();
+      muatRiwayat();  // run barusan langsung muncul di riwayat
+      resolve();
     };
 
     es.onmessage = e => {
@@ -257,6 +330,76 @@ fetch("/api/status").then(r=>r.json()).then(s=>{
       `<div class="err">${s.pesan || "GOOGLE_API_KEY belum diisi di .env"}</div>`);
   }
 });
+/* ================= RIWAYAT ================= */
+const NAMA_FW = {langchain:"LangChain", langgraph:"LangGraph", crewai:"CrewAI"};
+
+function waktuRelatif(iso){
+  const d = new Date(iso), lewat = (Date.now() - d) / 1000;
+  if (lewat < 60)    return "baru saja";
+  if (lewat < 3600)  return Math.floor(lewat/60) + " menit lalu";
+  if (lewat < 86400) return Math.floor(lewat/3600) + " jam lalu";
+  return d.toLocaleDateString("id-ID", {day:"numeric", month:"short"});
+}
+
+async function muatRiwayat(){
+  const fw = document.getElementById("filterFw").value;
+  const r  = await fetch("/api/riwayat?limit=50" + (fw ? "&framework="+fw : ""));
+  const d  = await r.json();
+  const box = document.getElementById("riwayat");
+
+  box.innerHTML = d.item.map(e => `
+    <div class="runitem" data-fw="${e.framework}" data-id="${e.id}">
+      <div class="fw">${NAMA_FW[e.framework] || e.framework}</div>
+      <div class="mid">
+        <div class="topik">${esc(e.topik)}</div>
+        <div class="cuplik">${esc(e.cuplikan || "(tidak ada keluaran)")}</div>
+      </div>
+      <div class="meta">
+        <div class="${e.status==='gagal'?'gagal':''}">${e.status==='gagal'?'gagal':e.langkah+' langkah'}</div>
+        <div>${waktuRelatif(e.waktu)} &middot; ${e.detik}s</div>
+        <div>${esc(e.model||"")}${e.hemat?" &middot; hemat":""}</div>
+      </div>
+    </div>`).join("");
+
+  const s = d.statistik;
+  const rincian = Object.entries(s.per_framework||{})
+    .map(([k,v]) => `${NAMA_FW[k]||k} ${v}`).join(" &middot; ");
+  document.getElementById("statRiwayat").innerHTML =
+    s.total ? `${s.total} run${s.gagal?` (${s.gagal} gagal)`:""}${rincian?" &middot; "+rincian:""}` : "";
+}
+
+document.getElementById("riwayat").addEventListener("click", async e => {
+  const el = e.target.closest(".runitem");
+  if (!el) return;
+  const d = await (await fetch("/api/riwayat/" + el.dataset.id)).json();
+  if (d.error) return;
+
+  document.getElementById("dlgJudul").textContent =
+    `${NAMA_FW[d.framework]||d.framework} — ${d.topik}`;
+
+  const badan = d.peristiwa.map(p => {
+    if (p.type === "step")  return `<div class="step">${md(p.data)}</div>`;
+    if (p.type === "error") return `<div class="err">${esc(p.data)}</div>`;
+    return `<div>${md(p.data)}</div>`;
+  }).join("");
+
+  document.getElementById("dlgIsi").innerHTML =
+    `<div class="step">Model ${esc(d.model)} &middot; ${d.detik}s &middot; ` +
+    `${new Date(d.waktu).toLocaleString("id-ID")}${d.hemat?" &middot; mode hemat":""}</div>` + badan;
+  document.getElementById("dlg").showModal();
+});
+
+document.getElementById("dlgTutup").onclick = () => document.getElementById("dlg").close();
+document.getElementById("muatRiwayat").onclick = muatRiwayat;
+document.getElementById("filterFw").onchange = muatRiwayat;
+
+document.getElementById("hapusRiwayat").onclick = async () => {
+  if (!confirm("Hapus semua riwayat run? Tindakan ini tidak bisa dibatalkan.")) return;
+  await fetch("/api/riwayat", {method:"DELETE"});
+  muatRiwayat();
+};
+
+muatRiwayat();
 </script>
 </body>
 </html>
