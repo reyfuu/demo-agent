@@ -6,20 +6,24 @@ Demo lengkap + perbandingan praktis. Semua kode ada di folder ini.
 
 | File | Isi |
 |---|---|
+| `config.py` | Load `.env`, sediakan LLM Gemini + fallback saat kuota habis |
 | `01_langchain_demo.py` | Chain LCEL: dasar, bersusun, paralel, streaming |
 | `02_langgraph_demo.py` | Graph berstate dengan loop revisi + checkpoint memory |
 | `03_crewai_demo.py` | Crew 3 agent (Peneliti, Penulis, Editor) proses sequential |
 | `04_simulasi_offline.py` | Jalan tanpa API key, memperlihatkan beda arsitektur |
+| `app.py` + `static/` | Backend FastAPI + UI web tiga panel |
 
 ## Cara cepat
 
 ```bash
-python3 demo/04_simulasi_offline.py          # tanpa install apa pun
+# tanpa API key, tanpa install apa pun
+python3 demo/04_simulasi_offline.py
 
-pip install -r demo/requirements.txt
-export OPENAI_API_KEY=sk-...
-python3 demo/01_langchain_demo.py
+# versi lengkap (dari root proyek)
+./run.sh          # setup venv + install + jalankan UI
 ```
+
+Isi `GOOGLE_API_KEY` di `.env` lebih dulu. Lihat README di root.
 
 ## Analogi 1 kalimat
 

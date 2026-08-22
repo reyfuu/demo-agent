@@ -5,6 +5,8 @@ Lengkap dengan UI web untuk membandingkan hasilnya berdampingan secara live.
 
 ![stack](https://img.shields.io/badge/python-3.11-blue) ![gemini](https://img.shields.io/badge/LLM-Gemini-orange)
 
+![tampilan](docs/screenshot.png)
+
 ---
 
 ## Setup (3 langkah)
