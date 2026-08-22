@@ -1,10 +1,11 @@
 """
-DEMO 4 - SIMULASI OFFLINE (tanpa API key, tanpa install apa pun)
-================================================================
+DEMO 4 - SIMULASI OFFLINE (tanpa API key, tanpa internet)
+=========================================================
 Meniru pola pikir ketiga framework dengan "LLM palsu" supaya perbedaan
-ARSITEKTUR-nya terlihat jelas walau tidak ada koneksi internet.
+ARSITEKTUR-nya terlihat jelas. Berguna untuk memahami konsep dulu
+sebelum memasang API key.
 
-    python 04_simulasi_offline.py
+    python demo/04_simulasi_offline.py
 """
 
 import random
@@ -12,7 +13,6 @@ import random
 random.seed(7)
 
 
-# ---------- LLM palsu ----------
 def fake_llm(prompt: str) -> str:
     return f"[jawaban LLM untuk: {prompt[:60]}...]"
 
@@ -23,9 +23,9 @@ def fake_llm(prompt: str) -> str:
 def pola_langchain(topik: str) -> str:
     print("\n--- POLA LANGCHAIN (chain linear) ---")
     langkah = [
-        lambda x: f"Prompt: jelaskan {x}",
-        fake_llm,
-        lambda x: x.strip().upper(),  # output parser
+        lambda x: f"Prompt: jelaskan {x}",  # prompt template
+        fake_llm,                            # llm
+        lambda x: x.strip().upper(),         # output parser
     ]
     nilai = topik
     for i, f in enumerate(langkah, 1):
@@ -57,8 +57,7 @@ def pola_langgraph(topik: str) -> dict:
 
     node = "tulis"
     while node != "selesai":
-        state = node_tulis(state)
-        state = node_nilai(state)
+        state = node_nilai(node_tulis(state))
         node = rute(state)
         print(f"  putaran {state['putaran']} skor {state['skor']} -> {node}")
     print("  jejak:", " -> ".join(state["log"]))

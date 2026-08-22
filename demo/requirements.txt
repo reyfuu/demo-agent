@@ -1,4 +1,8 @@
+# Butuh Python 3.10 - 3.13 (Python 3.14 belum didukung crewai)
 langchain>=0.3
-langchain-openai>=0.2
+langchain-google-genai>=2.0
 langgraph>=0.2
 crewai>=0.80
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-dotenv>=1.0

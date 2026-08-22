@@ -1,0 +1,121 @@
+# Demo: LangChain vs LangGraph vs CrewAI
+
+Tiga framework AI agent, satu topik yang sama, ditenagai **Google Gemini**.
+Lengkap dengan UI web untuk membandingkan hasilnya berdampingan secara live.
+
+![stack](https://img.shields.io/badge/python-3.11-blue) ![gemini](https://img.shields.io/badge/LLM-Gemini-orange)
+
+---
+
+## Setup (3 langkah)
+
+### 1. Ambil API key Gemini (gratis)
+
+Buka <https://aistudio.google.com/apikey> lalu klik **Create API key**.
+
+### 2. Isi `.env`
+
+```bash
+cp .env.example .env
+nano .env        # tempel key-mu di GOOGLE_API_KEY=
+```
+
+Isi file `.env`:
+
+```
+GOOGLE_API_KEY=AIzaSy...punyamu
+GEMINI_MODEL=gemini-2.0-flash
+```
+
+### 3. Jalankan
+
+```bash
+./run.sh
+```
+
+Buka <http://127.0.0.1:8765>
+
+---
+
+## Kenapa harus venv?
+
+Sistem ini punya **Python 3.14**, sedangkan `crewai` dan beberapa dependensinya
+belum mendukung 3.14. Karena itu `run.sh` otomatis membuat virtualenv dengan
+**Python 3.11**. Kalau menginstall manual dengan `pip install` di Python 3.14,
+akan gagal build. Ini penyebab error install yang kamu alami sebelumnya.
+
+Setup manual jika perlu:
+
+```bash
+python3.11 -m venv .venv
+.venv/bin/pip install -r demo/requirements.txt
+.venv/bin/python demo/app.py
+```
+
+---
+
+## Isi proyek
+
+| File | Isi |
+|---|---|
+| `demo/config.py` | Load `.env`, sediakan LLM Gemini untuk ketiga framework |
+| `demo/01_langchain_demo.py` | Chain LCEL: dasar, bersusun, paralel, streaming |
+| `demo/02_langgraph_demo.py` | Graph berstate + loop revisi + checkpoint memory |
+| `demo/03_crewai_demo.py` | Crew 3 agent: Peneliti, Penulis, Editor |
+| `demo/04_simulasi_offline.py` | Jalan **tanpa API key**, memperlihatkan beda arsitektur |
+| `demo/app.py` | Backend FastAPI, streaming SSE |
+| `demo/static/index.html` | UI web tiga panel |
+| `demo/PERBANDINGAN.md` | Analisis perbandingan lengkap |
+
+Jalankan satuan lewat CLI:
+
+```bash
+.venv/bin/python demo/04_simulasi_offline.py   # tanpa API key
+.venv/bin/python demo/01_langchain_demo.py
+.venv/bin/python demo/02_langgraph_demo.py
+.venv/bin/python demo/03_crewai_demo.py
+```
+
+---
+
+## Analogi 1 kalimat
+
+- **LangChain** = pipa air lurus. Masuk satu ujung, keluar ujung lain.
+- **LangGraph** = papan sirkuit. Ada percabangan, saklar, dan kabel balik.
+- **CrewAI** = tim kantor. Kamu tulis job description, mereka kerja estafet.
+
+## Ringkasan perbedaan
+
+| Aspek | LangChain | LangGraph | CrewAI |
+|---|---|---|---|
+| Abstraksi inti | Chain / Runnable | Node + Edge + State | Agent + Task + Crew |
+| Bentuk alur | Linear (DAG) | Graph, boleh siklik | Sequential / hierarchical |
+| Loop & retry | Manual, canggung | Native (conditional edge) | Implisit, terbatas |
+| State bersama | Tidak ada | Kelas eksplisit + reducer | Konteks antar task |
+| Memory | Sederhana | Checkpointer, resume, time-travel | Short/long term bawaan |
+| Human-in-the-loop | Tulis sendiri | `interrupt()` native | Terbatas |
+| Kontrol alur | Sedang | Sangat tinggi | Rendah (LLM yang atur) |
+| Kurva belajar | Rendah | Tinggi | Rendah |
+| Determinisme | Tinggi | Tinggi | Rendah |
+| Biaya token | Paling hemat | Sedang | Paling boros |
+| Kesiapan produksi | Task sederhana | Paling siap | Prototipe / demo |
+| Relasi | Fondasi | Dibangun di atas LangChain | Berdiri sendiri (LiteLLM) |
+
+Penjelasan mendalam ada di [`demo/PERBANDINGAN.md`](demo/PERBANDINGAN.md).
+
+---
+
+## Troubleshooting
+
+**`ModuleNotFoundError` / gagal build saat pip install**
+Kamu memakai Python 3.14. Pakai `./run.sh` yang otomatis memakai Python 3.11.
+
+**Panel merah "API key BELUM diisi"**
+File `.env` belum ada atau masih berisi placeholder. Ulangi langkah 2.
+
+**Port bentrok**
+`PORT=9000 ./run.sh`
+
+**429 / quota habis**
+Free tier Gemini punya limit per menit. Tunggu sebentar atau jalankan
+framework satu per satu, jangan tekan "Jalankan Semua".

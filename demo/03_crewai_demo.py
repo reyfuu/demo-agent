@@ -1,80 +1,98 @@
 """
-DEMO 3 - CrewAI
-===============
-Fokus: TIM AGENT berperan (role-based). Agent punya role/goal/backstory,
-Task punya deskripsi + expected_output, Crew mengatur proses sequential/hierarchical.
-Cocok untuk: simulasi tim (peneliti + penulis + editor), workflow bisnis.
+DEMO 3 - CrewAI (Gemini)
+========================
+Tim 3 agent berperan, proses sequential, konteks diestafetkan.
 
-Jalankan:
-    pip install crewai crewai-tools
-    export OPENAI_API_KEY=sk-...
-    python 03_crewai_demo.py
+    python demo/03_crewai_demo.py
 """
 
-from crewai import Agent, Task, Crew, Process
+from crewai import Agent, Crew, Process, Task
 
-TOPIK = "AI Agent untuk UMKM di Indonesia"
+from config import crewai_llm
 
-# --- AGENT: didefinisikan lewat persona, bukan kode alur ---
-peneliti = Agent(
-    role="Peneliti Teknologi",
-    goal=f"Mengumpulkan 5 fakta kunci tentang {TOPIK}",
-    backstory="Analis riset yang teliti dan anti-halusinasi. Selalu spesifik.",
-    verbose=True,
-    allow_delegation=False,
-)
 
-penulis = Agent(
-    role="Penulis Konten",
-    goal="Mengubah riset menjadi artikel blog yang enak dibaca",
-    backstory="Content writer 10 tahun, gaya santai tapi kredibel.",
-    verbose=True,
-    allow_delegation=False,
-)
+def build(topik: str):
+    llm = crewai_llm()
 
-editor = Agent(
-    role="Editor",
-    goal="Memastikan artikel akurat, ringkas, dan bebas typo",
-    backstory="Editor senior yang galak soal kejelasan kalimat.",
-    verbose=True,
-    allow_delegation=False,
-)
+    peneliti = Agent(
+        role="Peneliti Teknologi",
+        goal=f"Mengumpulkan 5 fakta kunci tentang {topik}",
+        backstory="Analis riset yang teliti dan anti-halusinasi. Selalu spesifik.",
+        llm=llm,
+        verbose=True,
+        allow_delegation=False,
+        max_iter=3,
+    )
+    penulis = Agent(
+        role="Penulis Konten",
+        goal="Mengubah riset jadi artikel blog yang enak dibaca",
+        backstory="Content writer 10 tahun, gaya santai tapi kredibel.",
+        llm=llm,
+        verbose=True,
+        allow_delegation=False,
+        max_iter=3,
+    )
+    editor = Agent(
+        role="Editor",
+        goal="Memastikan artikel akurat, ringkas, bebas typo",
+        backstory="Editor senior yang galak soal kejelasan kalimat.",
+        llm=llm,
+        verbose=True,
+        allow_delegation=False,
+        max_iter=3,
+    )
 
-# --- TASK: output task sebelumnya otomatis jadi konteks task berikutnya ---
-t_riset = Task(
-    description=f"Riset {TOPIK}. Fokus: manfaat, kendala, contoh nyata.",
-    expected_output="Daftar 5 poin fakta, tiap poin 1-2 kalimat.",
-    agent=peneliti,
-)
+    t1 = Task(
+        description=f"Riset '{topik}'. Fokus: manfaat, kendala, contoh nyata.",
+        expected_output="Daftar 5 poin fakta, tiap poin 1-2 kalimat, Bahasa Indonesia.",
+        agent=peneliti,
+    )
+    t2 = Task(
+        description="Tulis artikel blog 300 kata berdasarkan hasil riset.",
+        expected_output="Artikel markdown: judul, 3 subjudul, penutup.",
+        agent=penulis,
+        context=[t1],
+    )
+    t3 = Task(
+        description="Edit artikel: perjelas kalimat, buang basa-basi, cek konsistensi.",
+        expected_output="Versi final artikel markdown siap publish.",
+        agent=editor,
+        context=[t2],
+    )
 
-t_tulis = Task(
-    description="Tulis artikel blog 300 kata berdasarkan hasil riset.",
-    expected_output="Artikel markdown dengan judul, 3 subjudul, dan penutup.",
-    agent=penulis,
-    context=[t_riset],
-)
+    crew = Crew(
+        agents=[peneliti, penulis, editor],
+        tasks=[t1, t2, t3],
+        process=Process.sequential,  # atau Process.hierarchical + manager_llm
+        verbose=True,
+    )
+    return crew, [t1, t2, t3]
 
-t_edit = Task(
-    description="Edit artikel: perjelas kalimat, buang basa-basi, cek konsistensi.",
-    expected_output="Versi final artikel markdown siap publish.",
-    agent=editor,
-    context=[t_tulis],
-    output_file="artikel_final.md",
-)
 
-crew = Crew(
-    agents=[peneliti, penulis, editor],
-    tasks=[t_riset, t_tulis, t_edit],
-    process=Process.sequential,  # ganti Process.hierarchical untuk pakai manager agent
-    verbose=True,
-)
+def jalankan(topik: str):
+    """Generator event untuk UI. CrewAI blocking, jadi laporkan per task."""
+    crew, tasks = build(topik)
+    nama = ["Peneliti mengumpulkan fakta", "Penulis menyusun artikel", "Editor memoles"]
+
+    yield "step", "Crew dimulai (3 agent, proses sequential)"
+    hasil = crew.kickoff()
+
+    for label, t in zip(nama, tasks):
+        yield "step", label
+        out = getattr(t, "output", None)
+        yield "token", str(out.raw if out and hasattr(out, "raw") else out or "-")
+
+    yield "step", "Output final"
+    yield "token", str(hasil)
+    yield "done", ""
 
 
 def main():
-    hasil = crew.kickoff()
-    print("\n=== OUTPUT FINAL ===")
-    print(hasil)
-    print("\nToken usage:", crew.usage_metrics)
+    for tipe, teks in jalankan("AI Agent untuk UMKM di Indonesia"):
+        if tipe == "step":
+            print(f"\n\n=== {teks} ===")
+        elif tipe == "token":
+            print(teks)
 
 
 if __name__ == "__main__":

@@ -1,96 +1,108 @@
 """
-DEMO 2 - LangGraph
-==================
-Fokus: GRAPH berstate. Node + edge + kondisi + loop + memory.
-Cocok untuk: agent yang perlu retry, self-correction, human-in-the-loop, branching.
+DEMO 2 - LangGraph (Gemini)
+===========================
+Graph berstate dengan LOOP revisi:
+    tulis -> nilai -> (skor < 8 dan putaran < 3 ? kembali ke tulis : selesai)
 
-Demo: penulis artikel dengan loop revisi.
-  tulis -> nilai -> (skor < 8 ? revisi : selesai)
-
-Jalankan:
-    pip install langgraph langchain-openai
-    export OPENAI_API_KEY=sk-...
-    python 02_langgraph_demo.py
+    python demo/02_langgraph_demo.py
 """
 
-from typing import TypedDict, Annotated
 import operator
+import re
+from typing import Annotated, TypedDict
 
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
 from langgraph.checkpoint.memory import MemorySaver
-from langchain_openai import ChatOpenAI
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+from config import get_llm
+
+BATAS_SKOR = 8
+BATAS_PUTARAN = 3
 
 
-# --- STATE: data bersama yang mengalir antar node ---
 class State(TypedDict):
     topik: str
     draf: str
     skor: int
     kritik: str
     putaran: int
-    log: Annotated[list[str], operator.add]  # reducer: list digabung, bukan ditimpa
+    log: Annotated[list[str], operator.add]  # reducer: digabung, bukan ditimpa
 
 
-# --- NODE ---
-def node_tulis(state: State) -> dict:
-    kritik = state.get("kritik", "")
-    instruksi = f"\n\nPerbaiki berdasarkan kritik ini: {kritik}" if kritik else ""
-    draf = llm.invoke(
-        f"Tulis paragraf 100 kata tentang '{state['topik']}'.{instruksi}"
-    ).content
-    return {"draf": draf, "putaran": state.get("putaran", 0) + 1, "log": ["tulis"]}
+def build():
+    llm = get_llm()
+
+    def node_tulis(s: State) -> dict:
+        kritik = s.get("kritik") or ""
+        tambahan = f"\n\nPerbaiki berdasarkan kritik: {kritik}" if kritik else ""
+        draf = llm.invoke(
+            f"Tulis paragraf 100 kata Bahasa Indonesia tentang '{s['topik']}'.{tambahan}"
+        ).content
+        return {
+            "draf": draf,
+            "putaran": s.get("putaran", 0) + 1,
+            "log": [f"tulis#{s.get('putaran', 0) + 1}"],
+        }
+
+    def node_nilai(s: State) -> dict:
+        hasil = llm.invoke(
+            "Nilai teks berikut 1-10 lalu beri 1 kalimat kritik.\n"
+            "Format WAJIB persis:\nSKOR: <angka>\nKRITIK: <teks>\n\n" + s["draf"]
+        ).content
+        m = re.search(r"SKOR:\s*(\d+)", hasil, re.I)
+        skor = int(m.group(1)) if m else 5
+        k = re.search(r"KRITIK:\s*(.+)", hasil, re.I)
+        kritik = k.group(1).strip() if k else hasil.strip()
+        return {"skor": skor, "kritik": kritik, "log": [f"nilai={skor}"]}
+
+    def rute(s: State) -> str:
+        if s["skor"] >= BATAS_SKOR or s["putaran"] >= BATAS_PUTARAN:
+            return "selesai"
+        return "revisi"
+
+    g = StateGraph(State)
+    g.add_node("tulis", node_tulis)
+    g.add_node("nilai", node_nilai)
+    g.add_edge(START, "tulis")
+    g.add_edge("tulis", "nilai")
+    g.add_conditional_edges("nilai", rute, {"revisi": "tulis", "selesai": END})
+    return g.compile(checkpointer=MemorySaver())
 
 
-def node_nilai(state: State) -> dict:
-    hasil = llm.invoke(
-        "Nilai teks berikut 1-10 lalu beri 1 kalimat kritik.\n"
-        "Format WAJIB: SKOR: <angka>\nKRITIK: <teks>\n\n" + state["draf"]
-    ).content
-    skor = 5
-    kritik = hasil
-    for baris in hasil.splitlines():
-        if baris.upper().startswith("SKOR:"):
-            try:
-                skor = int("".join(c for c in baris if c.isdigit())[:2])
-            except ValueError:
-                pass
-        if baris.upper().startswith("KRITIK:"):
-            kritik = baris.split(":", 1)[1].strip()
-    return {"skor": skor, "kritik": kritik, "log": [f"nilai={skor}"]}
+def jalankan(topik: str, thread_id: str = "demo"):
+    """Generator event untuk UI, streaming per node."""
+    app = build()
+    cfg = {"configurable": {"thread_id": thread_id}}
+    akhir = {}
 
+    for event in app.stream({"topik": topik, "putaran": 0}, cfg):
+        for nama_node, out in event.items():
+            akhir.update(out)
+            if nama_node == "tulis":
+                yield "step", f"Node `tulis` - putaran {out['putaran']}"
+                yield "token", out["draf"]
+            elif nama_node == "nilai":
+                yield "step", f"Node `nilai` - skor {out['skor']}/10"
+                yield "token", f"Kritik: {out['kritik']}"
 
-# --- CONDITIONAL EDGE: inti pembeda LangGraph ---
-def rute(state: State) -> str:
-    if state["skor"] >= 8 or state["putaran"] >= 3:
-        return "selesai"
-    return "revisi"
-
-
-graph = StateGraph(State)
-graph.add_node("tulis", node_tulis)
-graph.add_node("nilai", node_nilai)
-graph.add_edge(START, "tulis")
-graph.add_edge("tulis", "nilai")
-graph.add_conditional_edges("nilai", rute, {"revisi": "tulis", "selesai": END})
-
-# --- MEMORY / CHECKPOINT: bisa pause, resume, time-travel ---
-app = graph.compile(checkpointer=MemorySaver())
+    lanjut = akhir.get("skor", 0) < BATAS_SKOR and akhir.get("putaran", 0) < BATAS_PUTARAN
+    yield "step", "Selesai" if not lanjut else "Berhenti (batas putaran)"
+    yield "token", (
+        f"\n**Skor akhir:** {akhir.get('skor')} | "
+        f"**Putaran:** {akhir.get('putaran')}\n\n"
+        f"**Jejak node:** {' -> '.join(akhir.get('log', []))}"
+    )
+    yield "done", ""
 
 
 def main():
-    config = {"configurable": {"thread_id": "demo-1"}}
-    hasil = app.invoke({"topik": "AI Agent untuk UMKM", "putaran": 0}, config)
-
-    print("=== HASIL ===")
-    print(hasil["draf"])
-    print("\nSkor akhir :", hasil["skor"])
-    print("Putaran    :", hasil["putaran"])
-    print("Jejak node :", " -> ".join(hasil["log"]))
-
-    print("\n=== ASCII GRAPH ===")
-    print(app.get_graph().draw_ascii())
+    for tipe, teks in jalankan("AI Agent untuk UMKM di Indonesia"):
+        if tipe == "step":
+            print(f"\n\n=== {teks} ===")
+        elif tipe == "token":
+            print(teks)
+    print("\n=== GRAPH ===")
+    print(build().get_graph().draw_ascii())
 
 
 if __name__ == "__main__":

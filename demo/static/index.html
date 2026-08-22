@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LangChain vs LangGraph vs CrewAI</title>
+<style>
+:root{
+  --bg:#0b0e14; --panel:#141922; --panel2:#1b2130; --line:#262e3d;
+  --txt:#e6e9ef; --dim:#8b95a8;
+  --lc:#22c55e; --lg:#3b82f6; --cw:#f59e0b;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font:15px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  background:var(--bg);color:var(--txt);min-height:100vh;
+  background-image:radial-gradient(900px 500px at 10% -10%,#1b2a4a55,transparent),
+                   radial-gradient(700px 400px at 100% 0,#3b1a4a44,transparent);
+}
+.wrap{max-width:1240px;margin:0 auto;padding:28px 20px 60px}
+
+header h1{font-size:26px;letter-spacing:-.4px}
+header h1 b:nth-of-type(1){color:var(--lc)}
+header h1 b:nth-of-type(2){color:var(--lg)}
+header h1 b:nth-of-type(3){color:var(--cw)}
+header p{color:var(--dim);margin-top:6px;font-size:14px}
+
+.status{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 20px}
+.pill{
+  font-size:12px;padding:4px 11px;border-radius:99px;
+  border:1px solid var(--line);background:var(--panel);color:var(--dim)
+}
+.pill.ok{border-color:#1e5f3a;background:#0f2a1c;color:#6ee7a0}
+.pill.bad{border-color:#6b2020;background:#2a1212;color:#f87171}
+
+.bar{
+  display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+  background:var(--panel);border:1px solid var(--line);
+  border-radius:14px;padding:12px;margin-bottom:20px
+}
+.bar input{
+  flex:1;min-width:240px;background:var(--panel2);border:1px solid var(--line);
+  color:var(--txt);padding:11px 14px;border-radius:10px;font:inherit;outline:none
+}
+.bar input:focus{border-color:#3b82f6}
+.bar button{
+  background:#2563eb;color:#fff;border:0;padding:11px 22px;border-radius:10px;
+  font:600 14px/1 inherit;cursor:pointer;transition:.15s
+}
+.bar button:hover{background:#1d4ed8}
+.bar button:disabled{opacity:.45;cursor:not-allowed}
+.bar button.ghost{background:transparent;border:1px solid var(--line);color:var(--dim)}
+
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media(max-width:960px){.grid{grid-template-columns:1fr}}
+
+.card{
+  background:var(--panel);border:1px solid var(--line);border-radius:16px;
+  display:flex;flex-direction:column;overflow:hidden;min-height:440px
+}
+.card>header{padding:14px 16px;border-bottom:1px solid var(--line);position:relative}
+.card>header::before{content:"";position:absolute;inset:0 0 auto 0;height:3px}
+.card[data-fw=langchain]>header::before{background:var(--lc)}
+.card[data-fw=langgraph]>header::before{background:var(--lg)}
+.card[data-fw=crewai]>header::before{background:var(--cw)}
+.card h2{font-size:16px;display:flex;align-items:center;gap:8px}
+.dot{width:8px;height:8px;border-radius:99px;background:#3a4356}
+.card[data-fw=langchain] .dot{background:var(--lc)}
+.card[data-fw=langgraph] .dot{background:var(--lg)}
+.card[data-fw=crewai] .dot{background:var(--cw)}
+.card .sub{font-size:12px;color:var(--dim);margin-top:3px;min-height:34px}
+.card .run{margin-top:10px;width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);
+  background:var(--panel2);color:var(--txt);cursor:pointer;font:600 13px/1 inherit}
+.card .run:hover{background:#232b3c}
+.card .run:disabled{opacity:.5;cursor:not-allowed}
+
+.out{
+  flex:1;padding:14px 16px;overflow-y:auto;max-height:520px;
+  font-size:13.5px;white-space:pre-wrap;word-break:break-word
+}
+.out:empty::after{content:"Belum dijalankan.";color:#5b6478;font-style:italic}
+.out .step{
+  margin:14px 0 8px;font:600 12px/1.4 ui-monospace,monospace;
+  color:#93a4c0;background:var(--panel2);border-left:3px solid #3b4356;
+  padding:6px 10px;border-radius:0 6px 6px 0
+}
+.out .step:first-child{margin-top:0}
+.card[data-fw=langchain] .step{border-left-color:var(--lc)}
+.card[data-fw=langgraph] .step{border-left-color:var(--lg)}
+.card[data-fw=crewai] .step{border-left-color:var(--cw)}
+.out .err{color:#f87171;background:#2a1212;padding:10px;border-radius:8px;font-size:12.5px}
+.out code{background:#0c1017;padding:1px 5px;border-radius:4px;font-size:12.5px}
+
+.spin{display:inline-block;width:11px;height:11px;border:2px solid #ffffff33;
+  border-top-color:#fff;border-radius:99px;animation:s .7s linear infinite;vertical-align:-1px}
+@keyframes s{to{transform:rotate(360deg)}}
+
+table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13.5px}
+th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top}
+th{background:var(--panel2);font-weight:600}
+tbody tr:nth-child(even){background:#ffffff05}
+details{margin-top:28px;background:var(--panel);border:1px solid var(--line);
+  border-radius:16px;padding:16px 18px}
+summary{cursor:pointer;font-weight:600;font-size:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1><b>LangChain</b> vs <b>LangGraph</b> vs <b>CrewAI</b></h1>
+  <p>Jalankan topik yang sama di tiga framework dan lihat perbedaan cara kerjanya secara langsung. Ditenagai Google Gemini.</p>
+</header>
+
+<div class="status" id="status"><span class="pill">memuat status...</span></div>
+
+<div class="bar">
+  <input id="topik" value="AI Agent untuk UMKM di Indonesia" placeholder="Masukkan topik...">
+  <button id="runAll">Jalankan Semua</button>
+  <button id="clear" class="ghost">Bersihkan</button>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<details open>
+  <summary>Tabel perbandingan</summary>
+  <table>
+    <thead><tr><th>Aspek</th><th>LangChain</th><th>LangGraph</th><th>CrewAI</th></tr></thead>
+    <tbody>
+      <tr><td>Abstraksi inti</td><td>Chain / Runnable</td><td>Node + Edge + State</td><td>Agent + Task + Crew</td></tr>
+      <tr><td>Bentuk alur</td><td>Linear (DAG)</td><td>Graph, boleh siklik</td><td>Sequential / hierarchical</td></tr>
+      <tr><td>Loop &amp; retry</td><td>Manual, canggung</td><td>Native (conditional edge)</td><td>Implisit, terbatas</td></tr>
+      <tr><td>State bersama</td><td>Tidak ada</td><td>Kelas eksplisit + reducer</td><td>Konteks antar task</td></tr>
+      <tr><td>Memory</td><td>Sederhana</td><td>Checkpointer, resume, time-travel</td><td>Short/long term bawaan</td></tr>
+      <tr><td>Human-in-the-loop</td><td>Tulis sendiri</td><td><code>interrupt()</code> native</td><td>Terbatas</td></tr>
+      <tr><td>Kontrol alur</td><td>Sedang</td><td>Sangat tinggi</td><td>Rendah (LLM yang atur)</td></tr>
+      <tr><td>Kurva belajar</td><td>Rendah</td><td>Tinggi</td><td>Rendah</td></tr>
+      <tr><td>Determinisme</td><td>Tinggi</td><td>Tinggi</td><td>Rendah</td></tr>
+      <tr><td>Biaya token</td><td>Paling hemat</td><td>Sedang</td><td>Paling boros</td></tr>
+      <tr><td>Kesiapan produksi</td><td>Task sederhana</td><td>Paling siap</td><td>Prototipe / demo</td></tr>
+      <tr><td>Relasi</td><td>Fondasi</td><td>Di atas LangChain</td><td>Berdiri sendiri (LiteLLM)</td></tr>
+    </tbody>
+  </table>
+</details>
+
+</div>
+
+<script>
+const FW = [
+  {id:"langchain", nama:"LangChain", sub:"Chain linear: prompt | llm | parser. Deterministik, mudah didebug."},
+  {id:"langgraph", nama:"LangGraph", sub:"Graph berstate dengan loop revisi sampai skor >= 8 atau 3 putaran."},
+  {id:"crewai",    nama:"CrewAI",    sub:"Tim 3 agent: Peneliti, Penulis, Editor. Konteks diestafetkan."},
+];
+
+const grid = document.getElementById("grid");
+grid.innerHTML = FW.map(f => `
+  <section class="card" data-fw="${f.id}">
+    <header>
+      <h2><span class="dot"></span>${f.nama}</h2>
+      <div class="sub">${f.sub}</div>
+      <button class="run" data-id="${f.id}">Jalankan</button>
+    </header>
+    <div class="out" id="out-${f.id}"></div>
+  </section>`).join("");
+
+const esc = s => s.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const md  = s => esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`([^`]+)`/g,"<code>$1</code>");
+
+const aktif = {};
+
+function jalankan(id){
+  const out = document.getElementById("out-"+id);
+  const btn = document.querySelector(`.run[data-id="${id}"]`);
+  if (aktif[id]) return;
+  aktif[id] = true;
+  out.innerHTML = "";
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Berjalan...';
+
+  const topik = encodeURIComponent(document.getElementById("topik").value || "AI Agent");
+  const es = new EventSource(`/api/run?framework=${id}&topik=${topik}`);
+  let buf = null;
+
+  const selesai = () => {
+    es.close(); aktif[id] = false;
+    btn.disabled = false; btn.textContent = "Jalankan Ulang";
+    cekSemua();
+  };
+
+  es.onmessage = e => {
+    const m = JSON.parse(e.data);
+    if (m.type === "step"){
+      const d = document.createElement("div");
+      d.className = "step"; d.innerHTML = md(m.data);
+      out.appendChild(d); buf = null;
+    } else if (m.type === "token"){
+      if (!buf){ buf = document.createElement("div"); out.appendChild(buf); buf.dataset.raw=""; }
+      buf.dataset.raw += m.data;
+      buf.innerHTML = md(buf.dataset.raw);
+    } else if (m.type === "error"){
+      const d = document.createElement("div");
+      d.className = "err"; d.textContent = m.data;
+      out.appendChild(d);
+    } else if (m.type === "end" || m.type === "done"){
+      if (m.type === "end") selesai();
+    }
+    out.scrollTop = out.scrollHeight;
+  };
+  es.onerror = selesai;
+}
+
+function cekSemua(){
+  document.getElementById("runAll").disabled = Object.values(aktif).some(Boolean);
+}
+
+grid.addEventListener("click", e => {
+  const b = e.target.closest(".run");
+  if (b) jalankan(b.dataset.id);
+});
+
+document.getElementById("runAll").onclick = () => {
+  FW.forEach(f => jalankan(f.id));
+  cekSemua();
+};
+
+document.getElementById("clear").onclick = () =>
+  FW.forEach(f => document.getElementById("out-"+f.id).innerHTML = "");
+
+fetch("/api/status").then(r=>r.json()).then(s=>{
+  const el = document.getElementById("status");
+  const p = [];
+  p.push(`<span class="pill ${s.api_key_ok?'ok':'bad'}">API key ${s.api_key_ok?'terpasang':'BELUM diisi (.env)'}</span>`);
+  p.push(`<span class="pill">model: ${s.model}</span>`);
+  for (const [k,v] of Object.entries(s.frameworks))
+    p.push(`<span class="pill ${v?'ok':'bad'}">${k} ${v?'siap':'belum terinstall'}</span>`);
+  el.innerHTML = p.join("");
+  if (!s.api_key_ok){
+    FW.forEach(f => document.getElementById("out-"+f.id).innerHTML =
+      `<div class="err">${s.pesan || "GOOGLE_API_KEY belum diisi di .env"}</div>`);
+  }
+});
+</script>
+</body>
+</html>
