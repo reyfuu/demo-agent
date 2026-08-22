@@ -11,6 +11,7 @@ import asyncio
 import importlib
 import json
 import queue
+import re
 import sys
 import threading
 import traceback
@@ -45,7 +46,12 @@ def index():
 
 @app.get("/api/status")
 def status():
-    hasil = {"model": config.MODEL, "api_key_ok": False, "frameworks": {}}
+    hasil = {
+        "model": config.MODEL,
+        "cadangan": [m for m in config.rantai_model() if m != config.MODEL][:3],
+        "api_key_ok": False,
+        "frameworks": {},
+    }
     try:
         config.api_key()
         hasil["api_key_ok"] = True
@@ -74,16 +80,31 @@ def _pesan_ramah(e: Exception) -> str:
             "Cek isi GOOGLE_API_KEY di file .env, lalu restart server.\n"
             "Ambil key baru di https://aistudio.google.com/apikey"
         )
+    if "503" in low or "unavailable" in low or "high demand" in low:
+        return (
+            f"Server Gemini sedang sibuk untuk model '{config.MODEL}'.\n"
+            "Ini biasanya sementara. Coba lagi sebentar lagi, atau ganti "
+            "GEMINI_MODEL di .env ke gemini-3.5-flash / gemini-2.5-flash."
+        )
     if "429" in low or "quota" in low or "rate limit" in low:
         return (
             "Kuota Gemini habis atau kena rate limit.\n"
             "Tunggu sekitar satu menit, lalu jalankan framework satu per satu "
             "(jangan tekan 'Jalankan Semua')."
         )
-    if "not found" in low and "model" in low:
+    if "not found" in low or "404" in low or "no longer available" in low:
+        # Google biasanya menyebut model penggantinya di pesan error
+        saran = re.search(r"use\s+models/([\w.\-]+)", t)
+        if saran:
+            return (
+                f"Model '{config.MODEL}' sudah tidak tersedia.\n"
+                f"Google menyarankan: {saran.group(1)}\n\n"
+                f"Ubah di .env:  GEMINI_MODEL={saran.group(1)}\n"
+                "lalu restart server."
+            )
         return (
-            "Model tidak ditemukan. Ganti GEMINI_MODEL di .env, "
-            "misalnya gemini-2.0-flash atau gemini-1.5-flash."
+            f"Model '{config.MODEL}' tidak ditemukan. "
+            "Ganti GEMINI_MODEL di .env, misalnya gemini-3.6-flash."
         )
     return t[:800]
 

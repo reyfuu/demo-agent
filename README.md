@@ -24,7 +24,7 @@ Isi file `.env`:
 
 ```
 GOOGLE_API_KEY=AIzaSy...punyamu
-GEMINI_MODEL=gemini-2.0-flash
+GEMINI_MODEL=gemini-3.7-flash
 ```
 
 ### 3. Jalankan
@@ -117,5 +117,17 @@ File `.env` belum ada atau masih berisi placeholder. Ulangi langkah 2.
 `PORT=9000 ./run.sh`
 
 **429 / quota habis**
-Free tier Gemini punya limit per menit. Tunggu sebentar atau jalankan
-framework satu per satu, jangan tekan "Jalankan Semua".
+Free tier Gemini membatasi sekitar **20 request per hari per model**.
+Aplikasi ini menanganinya otomatis: kalau kuota model utama habis, ia
+langsung geser ke model cadangan berikutnya dan menampilkan catatan
+seperti *"Kuota gemini-3.7-flash habis, otomatis memakai gemini-3.6-flash"*.
+
+Urutan cadangan diatur di `demo/config.py` pada variabel `CADANGAN`.
+Kalau semua kuota habis, tunggu reset harian atau pakai API key lain.
+
+**Model tidak ditemukan / 404**
+Google kadang memensiunkan model lama. Ganti `GEMINI_MODEL` di `.env`.
+Pesan error di UI akan menyebutkan nama model pengganti yang disarankan Google.
+
+**Sudah ganti `.env` tapi error masih menyebut model lama**
+Server membaca `.env` saat start. Restart dulu: `Ctrl-C` lalu `./run.sh`.

@@ -10,11 +10,11 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnableParallel
 
-from config import get_llm
+from config import llm_dengan_fallback
 
 
-def build():
-    llm = get_llm()
+def build(lapor=None):
+    llm, _model = llm_dengan_fallback(lapor=lapor)
     prompt = ChatPromptTemplate.from_messages([
         ("system", "Kamu penulis teknis Bahasa Indonesia yang ringkas."),
         ("human", "Jelaskan {topik} dalam 3 poin bullet."),
@@ -39,7 +39,10 @@ def build():
 
 def jalankan(topik: str):
     """Generator event untuk UI: (tipe, teks)."""
-    chain, bersusun, paralel = build()
+    catatan = []
+    chain, bersusun, paralel = build(lapor=catatan.append)
+    for c in catatan:
+        yield "step", c
 
     yield "step", "1/3 Chain dasar"
     for chunk in chain.stream({"topik": topik}):

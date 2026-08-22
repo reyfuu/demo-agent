@@ -8,11 +8,13 @@ Tim 3 agent berperan, proses sequential, konteks diestafetkan.
 
 from crewai import Agent, Crew, Process, Task
 
-from config import crewai_llm
+from config import crewai_llm, llm_dengan_fallback
 
 
-def build(topik: str):
-    llm = crewai_llm()
+def build(topik: str, lapor=None):
+    # pilih model yang kuotanya masih ada, lalu pakai untuk CrewAI
+    _, model = llm_dengan_fallback(lapor=lapor)
+    llm = crewai_llm(model=model)
 
     peneliti = Agent(
         role="Peneliti Teknologi",
@@ -71,7 +73,10 @@ def build(topik: str):
 
 def jalankan(topik: str):
     """Generator event untuk UI. CrewAI blocking, jadi laporkan per task."""
-    crew, tasks = build(topik)
+    catatan = []
+    crew, tasks = build(topik, lapor=catatan.append)
+    for c in catatan:
+        yield "step", c
     nama = ["Peneliti mengumpulkan fakta", "Penulis menyusun artikel", "Editor memoles"]
 
     yield "step", "Crew dimulai (3 agent, proses sequential)"
