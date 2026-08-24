@@ -326,8 +326,16 @@ fetch("/api/status").then(r=>r.json()).then(s=>{
     p.push(`<span class="pill ${v?'ok':'bad'}">${k} ${v?'siap':'belum terinstall'}</span>`);
   el.innerHTML = p.join("");
   if (!s.api_key_ok){
+    p.push(`<span class="pill">mode simulasi</span>`);
+    el.innerHTML = p.join("");
+    // Tanpa API key demo tetap bisa dijalankan (jawaban dibuat lokal).
     FW.forEach(f => document.getElementById("out-"+f.id).innerHTML =
-      `<div class="err">${s.pesan || "GOOGLE_API_KEY belum diisi di .env"}</div>`);
+      `<div class="step">GOOGLE_API_KEY belum diisi di <code>.env</code>, jadi demo berjalan
+       dalam <b>mode simulasi</b>: alur tiap framework tetap terlihat, tapi jawabannya
+       dibuat lokal. Tekan <b>Jalankan</b> untuk mencoba.<br><br>
+       Untuk jawaban asli: isi key dari
+       <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>
+       ke <code>.env</code>, lalu restart server.</div>`);
   }
 });
 /* ================= RIWAYAT ================= */

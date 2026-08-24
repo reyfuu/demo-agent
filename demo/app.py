@@ -25,6 +25,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 import config
 import riwayat
+import simulasi
 
 HERE = Path(__file__).resolve().parent
 
@@ -57,6 +58,7 @@ def status():
         "sisa_model": len([m for m in config.rantai_model() if m not in habis]),
         "total_model": len(config.rantai_model()),
         "api_key_ok": False,
+        "simulasi": False,
         "frameworks": {},
     }
     try:
@@ -64,6 +66,7 @@ def status():
         hasil["api_key_ok"] = True
     except RuntimeError as e:
         hasil["pesan"] = str(e)
+        hasil["simulasi"] = True  # demo tetap jalan, pakai LLM palsu
 
     for nama, paket in [
         ("langchain", "langchain_google_genai"),
@@ -131,9 +134,14 @@ async def run(framework: str, topik: str = "AI Agent untuk UMKM di Indonesia"):
 
         def worker():
             try:
-                config.api_key()
-                mod = importlib.import_module(MODUL[framework])
-                for tipe, teks in mod.jalankan(topik):
+                try:
+                    config.api_key()
+                    sumber = importlib.import_module(MODUL[framework]).jalankan(topik)
+                except RuntimeError:
+                    # API key belum diisi: jangan mati, pakai mode simulasi
+                    # supaya perbedaan arsitektur tetap bisa dilihat.
+                    sumber = simulasi.jalankan(framework, topik)
+                for tipe, teks in sumber:
                     q.put((tipe, teks))
             except RuntimeError as e:
                 # error konfigurasi: pesannya sudah ramah, tanpa traceback
